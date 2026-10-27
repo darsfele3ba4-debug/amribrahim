@@ -98,6 +98,8 @@
   .whatsapp-float{position:fixed;bottom:20px;left:20px;background:#25d366;color:#fff;width:58px;height:58px;border-radius:50%;display:flex;justify-content:center;align-items:center;box-shadow:0 8px 15px rgba(37,211,102,.4);z-index:100}
   .whatsapp-float svg{width:32px;height:32px;fill:currentColor}
   .confetti{position:fixed;top:-10px;width:11px;height:11px;z-index:9999;animation:fall linear forwards;border-radius:3px}
+  .shake{animation:shake .4s}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
   @keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0}}
 </style>
 </head>
@@ -232,6 +234,7 @@ $("startBtn").onclick = () => {
   const name = $("name").value.trim().replace(/\s+/g," ");
   if (name.split(" ").length < 2 || name.length < 5) { $("warn").textContent = "من فضلك اكتب اسمك ثنائياً على الأقل"; $("name").focus(); return; }
   studentName = name; $("warn").textContent = "";
+  initAudio(); // تفعيل الصوت على الموبايل من أول ضغطة
   quiz = shuffle(BANK).slice(0, QUIZ_COUNT);
   idx = 0; score = 0; answers = []; startTime = Date.now();
   $("studentName").textContent = "الطالب: " + studentName;
@@ -263,6 +266,7 @@ function choose(i){
   const btns = $("opts").children;
   for (const b of btns) b.disabled = true;
   const ok = i === item.a;
+  if (ok) playCorrect(); else playWrong();
   btns[item.a].classList.add("correct");
   if (!ok) btns[i].classList.add("wrong");
   if (ok) score++;
@@ -284,6 +288,7 @@ function finish(){
   $("ring").style.setProperty("--p", Math.round(score/quiz.length*100));
   const pct = score/quiz.length;
   $("rMsg").textContent = pct === 1 ? "ممتاز! الدرجة النهائية 🏆" : pct >= .85 ? "ممتاز جداً، استمر 👏" : pct >= .65 ? "جيد جداً، راجع الأسئلة الخاطئة" : pct >= .5 ? "جيد، تحتاج لمزيد من المراجعة" : "تحتاج للمذاكرة والمراجعة مرة أخرى";
+  playFinish();
   if (pct >= .85) confetti();
 
   const wrong = answers.filter(x => !x.ok);
@@ -316,6 +321,39 @@ function sendResult(){
     .catch(() => { box.className = "save fail"; box.textContent = "تعذر تسجيل الدرجة، تأكد من اتصال الإنترنت ثم اضغط إعادة المحاولة"; $("retrySave").classList.remove("hidden"); });
 }
 $("retrySave").onclick = sendResult;
+
+// --- محرك الصوت ---
+const AC = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function initAudio(){
+  try { if (!audioCtx && AC) audioCtx = new AC(); if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); } catch(e){}
+}
+function playTone(freq, type, duration, vol){
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + duration);
+}
+function playCorrect(){
+  initAudio();
+  playTone(523.25,"sine",0.1,0.1);
+  setTimeout(()=>playTone(659.25,"sine",0.1,0.1),100);
+  setTimeout(()=>playTone(783.99,"sine",0.2,0.15),200);
+  setTimeout(()=>playTone(1046.50,"sine",0.4,0.2),300);
+}
+function playWrong(){
+  initAudio();
+  playTone(300,"sawtooth",0.15,0.1);
+  setTimeout(()=>playTone(200,"sawtooth",0.25,0.15),150);
+  const q = $("quiz"); q.classList.remove("shake"); void q.offsetWidth; q.classList.add("shake");
+}
+function playFinish(){
+  initAudio();
+  [523.25,659.25,783.99,1046.50,1318.51].forEach((f,k)=>setTimeout(()=>playTone(f,"triangle",0.35,0.15),k*130));
+}
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
